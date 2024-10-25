@@ -1,0 +1,28 @@
+# Heatmap by Dr. Parviz Moradi
+#Load necessary libraries
+
+library(pheatmap)
+library(writexl)  # Load the writexl package
+library(dplyr)    # For data manipulation
+# Assuming your data is in a dataframe called 'data'
+data <- mean_grouped_selected_vars # Load your dataset
+# Extract genotype IDs
+group_ids <- data[, 1]  # First column: group ID
+data_matrix <- as.matrix(data[, -1])  # Extract data matrix excluding genotype IDs
+rownames(data_matrix) <- data$Group  # Set the first column as row names
+
+
+# Define a color palette
+my_palette <- colorRampPalette(c("blue", "white", "red"))(100)
+
+# Create heatmap and display it in the viewer
+pheatmap(data_matrix,
+         clustering_rows = TRUE,                      # Cluster groups
+         clustering_cols = TRUE,                      # Cluster variables
+         show_rownames = TRUE,                        # Show labels on the y-axis
+         show_colnames = TRUE,                        # Show variable names on the x-axis
+         main = "Heatmap of Mean Values by Group",
+         color = my_palette,
+         border_color = NA)    
+
+
