@@ -1,0 +1,46 @@
+# Script written by Dr. Parviz Moradi
+# Box-plot Mentha -------------------------------------------------------
+pacman::p_load(
+  ggplot2,
+  ggrepel,
+  ggtext,
+  tidyr,
+  dplyr
+)
+library(readxl)
+
+Data <- mean_grouped_selected_vars
+View(Data)
+
+# Restructure data for boxplot and identify outliers
+data_long <- tibble(Data) %>%
+  pivot_longer(cols = 2:15,
+               names_to = "Trait",
+               values_to = "Value")
+
+# Identify outliers and select a maximum of 3 per Trait
+outliers <- data_long %>%
+  group_by(Trait) %>%
+  filter(Value < quantile(Value, 0.25) - 1.5 * IQR(Value) | 
+           Value > quantile(Value, 0.75) + 1.5 * IQR(Value)) %>%
+  slice_max(order_by = abs(Value - median(Value)), n = 1, with_ties = FALSE)
+
+# Plot with outliers labeled
+ggplot(data_long) +
+  aes(y = Value, x = Trait, color = Trait) +
+  facet_wrap(~ Trait, scales = "free") +
+  
+  geom_jitter(width = 0.1, alpha = 0.6, size = 2) +
+  geom_boxplot(alpha = 0.8, outlier.shape = NA, width = 0.3, position = position_nudge(x = 0.1)) +
+  
+  # Add labels for up to 3 outliers only
+  geom_text_repel(data = outliers, aes(label = Group), 
+                  size = 3, color = "red", nudge_x = 0.2) +
+  
+  theme_bw() +
+  theme(legend.position = "none",
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_text(color = "black", size = 8, face = "bold"))
