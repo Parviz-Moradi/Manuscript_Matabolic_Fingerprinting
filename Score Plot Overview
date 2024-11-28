@@ -1,0 +1,120 @@
+# Load necessary libraries
+if (!requireNamespace("plotly", quietly = TRUE)) install.packages("plotly")
+if (!requireNamespace("cluster", quietly = TRUE)) install.packages("cluster")
+
+library(plotly)
+library(cluster)
+
+# load data
+data <- data_norm_grouped
+
+# Extract individual names and group labels
+genotype <- data[[1]]
+groups <- data[[ncol(data)]]
+
+# Remove only the first column to keep the rest of the data
+numeric_data <- data[, -c(1, 47)]
+
+
+# Perform PCA with scaling
+pca_result <- prcomp(numeric_data, scale. = FALSE)
+
+# Summary of PCA
+print(summary(pca_result))
+
+
+# Extract PCA loadings
+pca_loadings <- as.data.frame(pca_result$rotation)
+pca_loadings$Trait <- rownames(pca_loadings)
+
+# Ensure all columns except 'Trait' are numeric
+numeric_loadings <- pca_loadings[, sapply(pca_loadings, is.numeric)]
+
+# Calculate contribution rate of each trait
+contribution_rate <- numeric_loadings^2
+contribution_rate <- sweep(contribution_rate, 2, colSums(contribution_rate), "/")
+contribution_rate <- contribution_rate * 100  # Convert to percentage
+contribution_rate <- contribution_rate[, 1:3]  # Keep only PC1, PC2, and PC3
+contribution_rate$Trait <- pca_loadings$Trait
+
+# Save the contribution rates to a CSV file
+write.csv(contribution_rate, file = "contribution_rate.csv", row.names = FALSE)
+
+# Print the contribution rates
+print(contribution_rate)
+
+# Extract PCA scores and add individual names
+pca_scores <- as.data.frame(pca_result$x)
+pca_scores$Individual <- genotype
+# Perform hierarchical clustering on PCA scores
+dist_matrix <- dist(pca_scores[, 1:3])
+hc <- hclust(dist_matrix, method = "complete")
+clusters <- cutree(hc, k = 8)  # Adjust 'k' to change the number of clusters
+pca_scores$Cluster <- as.factor(clusters)
+
+# Check the structure of pca_scores to ensure Cluster is present
+str(pca_scores)
+
+# Create 3D PCA scores plot with clustering and labels
+score_plot_3d <- plot_ly(
+  pca_scores, 
+  x = ~PC1, 
+  y = ~PC2, 
+  z = ~PC3, 
+  color = ~Cluster, 
+  text = ~Individual, 
+  mode = 'markers+text', 
+  marker = list(size = 5, line = list(color = 'black', width = 2)),
+  textfont = list(size = 10, color = 'black', family = 'bold')
+) %>% 
+  add_text(textposition = 'top right') %>%
+  plotly::layout(  # Explicitly use plotly::layout to avoid conflict
+    title = "PCA Scores Plot with Clusters",
+    scene = list(
+      xaxis = list(
+        title = paste0("PC1 (", round(summary(pca_result)$importance[2, 1] * 100, 2), "%)"), 
+        linecolor = 'black', linewidth = 2, 
+        tickfont = list(family = 'bold', size = 12, color = 'black'), 
+        titlefont = list(family = 'bold', size = 14, color = 'black')
+      ),
+      yaxis = list(
+        title = paste0("PC2 (", round(summary(pca_result)$importance[2, 2] * 100, 2), "%)"), 
+        linecolor = 'black', linewidth = 2, 
+        tickfont = list(family = 'bold', size = 12, color = 'black'), 
+        titlefont = list(family = 'bold', size = 14, color = 'black')
+      ),
+      zaxis = list(
+        title = paste0("PC3 (", round(summary(pca_result)$importance[2, 3] * 100, 2), "%)"), 
+        linecolor = 'black', linewidth = 2, 
+        tickfont = list(family = 'bold', size = 12, color = 'black'), 
+        titlefont = list(family = 'bold', size = 14, color = 'black')
+      )
+    ),
+    font = list(family = 'bold', size = 12, color = 'black')
+  )
+
+
+# Display the plot
+score_plot_3d
+
+# Create 2D PCA scores plot
+score_plot_2d <- plot_ly(
+  pca_scores, 
+  x = ~PC1, 
+  y = ~PC2, 
+  color = ~genotype, 
+  text = ~genotype, 
+  mode = 'markers+text', 
+  marker = list(size = 5, line = list(color = 'black', width = 2)),
+  textfont = list(size = 10, color = 'black', family = 'bold')
+) %>%
+  add_text(textposition = 'top right') %>%
+  layout(
+    title = "2D PCA Scores Plot",
+    xaxis = list(title = paste0("PC1 (", round(summary(pca_result)$importance[2, 1] * 100, 2), "%)"), linecolor = 'black', linewidth = 2, tickfont = list(family = 'bold', size = 12, color = 'black'), titlefont = list(family = 'bold', size = 14, color = 'black')),
+    yaxis = list(title = paste0("PC2 (", round(summary(pca_result)$importance[2, 2] * 100, 2), "%)"), linecolor = 'black', linewidth = 2, tickfont = list(family = 'bold', size = 12, color = 'black'), titlefont = list(family = 'bold', size = 14, color = 'black')),
+    font = list(family = 'bold', size = 12, color = 'black')
+  )
+
+# Display the plot
+score_plot_2d
