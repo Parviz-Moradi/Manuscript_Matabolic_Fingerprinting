@@ -1,18 +1,17 @@
-#   loading plot by Dr. Parviz Morai
-
 # ---- Install necessary packages if not installed ----
 if (!requireNamespace("rgl", quietly = TRUE)) install.packages("rgl")
+if (!requireNamespace("htmlwidgets", quietly = TRUE)) install.packages("htmlwidgets")
 
 # ---- Load libraries ----
 library(rgl)  # For 3D interactive plots
+library(htmlwidgets)  # For saving as HTML
 
 # ---- Load your dataset ----
-# Assuming your dataset is named `Dataset_fingerprinting`
 # Replace this with actual dataset loading code (e.g., read.csv)
-data <- Dataset_fingerprinting
+data <- overview_grouped_data_xls
 
-# Remove the first and three last columns to keep the rest of the data
-pareto_scaled_data <- data[, -c(1, 47:50)]
+# Remove the first and last three columns to keep only relevant data
+pareto_scaled_data <- data[, -c(1, 47)]
 
 # Perform PCA without further scaling (assuming data is already scaled)
 pca_result <- prcomp(pareto_scaled_data, scale. = FALSE)
@@ -52,7 +51,8 @@ for (i in 1:nrow(pca_loadings_scaled)) {
   )
 }
 
-# Set axis labels and titles
+# Set axis labels and titles with thicker axis lines
+par3d(linewidth = 3)  # Thicker axis lines
 title3d(
   xlab = paste0("PC1 (", round(summary_pca$importance[2, 1] * 100, 2), "%)"),
   ylab = paste0("PC2 (", round(summary_pca$importance[2, 2] * 100, 2), "%)"),
@@ -60,23 +60,14 @@ title3d(
   col = "black"
 )
 
-# Add 3D axes
+# Add 3D axes without additional text
 axes3d(edges = "bbox", col = "black", labels = TRUE)
 
-# Add axis ticks
-axis3d("x", col = "black")
-axis3d("y", col = "black")
-axis3d("z", col = "black")
-
 # ---- Render the 3D plot in RStudio Viewer ----
-rglwidget()  # This displays the 3D plot in the RStudio viewer
+rglwidget()  # Displays the 3D plot in the RStudio viewer
 
 # ---- Save the 3D plot as a static image (PNG) ----
 rgl.snapshot("3d_loading_plot_with_axes.png")  # Saves a static image of the plot
 
-# ---- Alternative: Export the plot as an HTML file ----
-# Install the 'htmlwidgets' package if necessary
-if (!requireNamespace("htmlwidgets", quietly = TRUE)) install.packages("htmlwidgets")
-
-# Save the interactive 3D plot as HTML
+# ---- Export the plot as an HTML file ----
 htmlwidgets::saveWidget(rglwidget(), "3d_loading_plot_with_axes.html")
