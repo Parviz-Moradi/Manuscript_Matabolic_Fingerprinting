@@ -1,0 +1,52 @@
+# Script written by Dr. Parviz Moradi
+# Bar Plot with Data Points for Mentha Traits ----------------------------------
+pacman::p_load(
+  ggplot2,
+  ggtext,
+  tidyr,
+  dplyr
+)
+library(readxl)
+
+# Load your data
+Data <- DataFile_Species
+View(Data)
+
+# Restructure data for the plot
+data_long <- tibble(Data) %>%
+  pivot_longer(cols = 2:46,  # Assuming the traits are in columns 2 to 46
+               names_to = "Trait",
+               values_to = "Value")
+
+# Calculate means and standard errors for each trait
+summary_stats <- data_long %>%
+  group_by(Trait) %>%
+  summarise(
+    Mean = mean(Value, na.rm = TRUE),
+    SE = sd(Value, na.rm = TRUE) / sqrt(n()),
+    .groups = "drop"
+  )
+
+# Create the bar plot with data points
+ggplot() +
+  geom_bar(data = summary_stats, aes(x = Trait, y = Mean), 
+           stat = "identity", fill = "red", alpha = 0.7, width = 0.7) +  # Bar for mean
+  geom_errorbar(data = summary_stats, aes(x = Trait, ymin = Mean - SE, ymax = Mean + SE), 
+                width = 0.2, color = "red") +  # Error bars for SE
+  geom_jitter(data = data_long, aes(x = Trait, y = Value), 
+              width = 0.2, size = 1, alpha = 0.6, color = "red") +  # Data points
+  labs(
+    title = "",
+    x = "",
+    y = ""
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 5.5, face = "bold"),
+    axis.text.y = element_text(size = 10, face = "bold"),
+    axis.title = element_text(size = 12, face = "bold"),
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+  )
+
+
+
