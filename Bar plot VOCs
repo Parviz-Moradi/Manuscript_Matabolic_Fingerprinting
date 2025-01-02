@@ -1,0 +1,62 @@
+# Load necessary libraries
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+# Assuming your dataset is named Data_boxplot
+# Select variables 2 to 18 and include the 1st variable for labeling
+Data_boxplot <- Species_percentage
+data_subset <- Data_boxplot[, c(1, 2:18)]
+colnames(data_subset)[1] <- "Genotype"  # Rename the 1st column for clarity
+
+# Convert data to long format for plotting
+long_data <- pivot_longer(data_subset, cols = -Genotype, names_to = "Variable", values_to = "Value")
+
+# Identify the top data point (maximum value) for each variable
+top_points <- long_data %>%
+  group_by(Variable) %>%
+  slice_max(order_by = Value, n = 1)
+
+# Create the ggplot
+ggplot(long_data, aes(x = Variable, y = Value, color = Variable, fill = Variable)) +
+  geom_boxplot(alpha = 0.5, outlier.shape = NA) +  # Box plot with semi-transparent fill
+  geom_jitter(width = 0.2, size = 2.5, shape = 21, stroke = 0.5, color = "black", show.legend = FALSE) + 
+  geom_text(data = top_points, aes(label = Genotype), 
+            size = 3, vjust = -1, color = "black") +  # Label only the top points
+  scale_fill_manual(values = rainbow(17)) +  # Custom colors
+  scale_color_manual(values = rainbow(17)) +
+  labs(title = "",
+       x = "VOCs",
+       y = "% of Total") +
+  coord_cartesian(ylim = c(0, 50)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), # Rotate x-axis labels
+        legend.position = "none")  # Hide legend
+
+# 2nd series of vars
+data_subset <- Data_boxplot[, c(1, 19:30)]
+colnames(data_subset)[1] <- "Genotype"  # Rename the 1st column for clarity
+
+# Convert data to long format for plotting
+long_data <- pivot_longer(data_subset, cols = -Genotype, names_to = "Variable", values_to = "Value")
+
+# Identify the top data point (maximum value) for each variable
+top_points <- long_data %>%
+  group_by(Variable) %>%
+  slice_max(order_by = Value, n = 1)
+
+# Create the ggplot
+ggplot(long_data, aes(x = Variable, y = Value, color = Variable, fill = Variable)) +
+  geom_boxplot(alpha = 0.5, outlier.shape = NA) +  # Box plot with semi-transparent fill
+  geom_jitter(width = 0.2, size = 2.5, shape = 21, stroke = 0.5, color = "black", show.legend = FALSE) + 
+  geom_text(data = top_points, aes(label = Genotype), 
+            size = 3, vjust = -1, color = "black") +  # Label only the top points
+  scale_fill_manual(values = rainbow(17)) +  # Custom colors
+  scale_color_manual(values = rainbow(17)) +
+  labs(title = "",
+       x = "VOCs",
+       y = "% of Total") +
+  coord_cartesian(ylim = c(0, 80)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), # Rotate x-axis labels
+        legend.position = "none")  # Hide legend
