@@ -1,0 +1,107 @@
+# imput the RT and claculation RI
+# Load required packages
+library(readxl)
+library(dplyr)
+library(openxlsx)
+
+# Load your dataset (replace with your actual filename)
+df <- Datafile_Absolute
+
+# Ensure numeric columns are properly converted
+df <- df %>%
+  mutate(across(c(`RTMS 24/25`, RTFID24, RTFID25), as.numeric))
+
+# Track missing value indicators
+df <- df %>%
+  mutate(
+    RTMS_missing = is.na(`RTMS 24/25`),
+    RTFID24_missing = is.na(RTFID24),
+    RTFID25_missing = is.na(RTFID25)
+  )
+
+# Model to predict missing RTFID24 using RTMS
+model_rtfid24 <- lm(RTFID24 ~ `RTMS 24/25`, data = df, na.action = na.exclude)
+df$RTFID24[is.na(df$RTFID24)] <- predict(model_rtfid24, newdata = df[is.na(df$RTFID24), ])
+
+# Model to predict missing RTFID25 using RTMS
+model_rtfid25 <- lm(RTFID25 ~ `RTMS 24/25`, data = df, na.action = na.exclude)
+df$RTFID25[is.na(df$RTFID25)] <- predict(model_rtfid25, newdata = df[is.na(df$RTFID25), ])
+
+# Model to predict missing RTMS using both RTFID columns
+model_rtms <- lm(`RTMS 24/25` ~ RTFID24 + RTFID25, data = df, na.action = na.exclude)
+df$`RTMS 24/25`[is.na(df$`RTMS 24/25`)] <- predict(model_rtms, newdata = df[is.na(df$`RTMS 24/25`), ])
+
+# Create Excel workbook and worksheet
+wb <- createWorkbook()
+addWorksheet(wb, "Imputed Data")
+
+# Write the full data with all columns
+writeData(wb, "Imputed Data", df %>% select(Compound, `Cas no`, `RTMS 24/25`, RTFID24, RTFID25))
+
+# Define style for estimated values (red font, light red background)
+red_style <- createStyle(fontColour = "#FF0000", bgFill = "#FFEEEE")
+
+# Apply red style to estimated cells
+for (i in 1:nrow(df)) {
+  row_num <- i + 1  # because header is on row 1
+  if (df$RTMS_missing[i]) {
+    addStyle(wb, "Imputed Data", style = red_style, rows = row_num, cols = 3, gridExpand = TRUE)
+  }
+  if (df$RTFID24_missing[i]) {
+    addStyle(wb, "Imputed Data", style = red_style, rows = row_num, cols = 4, gridExpand = TRUE)
+  }
+  if (df$RTFID25_missing[i]) {
+    addStyle(wb, "Imputed Data", style = red_style, rows = row_num, cols = 5, gridExpand = TRUE)
+  }
+}
+
+# Save the Excel workbook
+saveWorkbook(wb, "Imputed_Retention_Times_Complete.xlsx", overwrite = TRUE)
+########################################################################################
+# Define RI calculation function
+calculate_RI <- function(rt, alkane_df) {
+  # Find the bracketing alkanes (tn and tn+1)
+  for (i in 1:(nrow(alkane_df) - 1)) {
+    tn <- alkane_df$RT[i]
+    tn1 <- alkane_df$RT[i + 1]
+    n <- alkane_df$n[i]
+    
+    if (!is.na(rt) && rt >= tn && rt <= tn1) {
+      ri <- 100 * (n + (rt - tn) / (tn1 - tn))
+      return(ri)
+    }
+  }
+  return(NA)  # Outside alkane range
+}
+
+#  Create your alkane reference table
+alkanes <- data.frame(
+  Compound = paste0("C", 10:18),
+  RTMS = c(4.83, 6.20, 7.60, 8.98, 10.30, 11.56, 12.75, 13.89, 14.97),
+  RTFID24 = c(7.77, 9.16, 10.54, 11.89, 13.17, 14.39, 15.55, 16.68, 17.54),
+  RTFID25 = c(4.75, 6.20, 7.52, 8.83, 10.10, 11.30, 12.45, 13.56, 14.60),
+  n = 10:18
+)
+
+# Load your compound dataset
+df <- Datafile_Absolute # sheet RT calc
+
+# Calculate RI for MS
+alkane_MS <- alkanes %>% select(n, RT = RTMS)
+df$RI_MS <- sapply(df$`RTMS 24/25`, calculate_RI, alkane_df = alkane_MS)
+
+# Calculate RI for FID24
+alkane_FID24 <- alkanes %>% select(n, RT = RTFID24)
+df$RI_FID24 <- sapply(df$RTFID24, calculate_RI, alkane_df = alkane_FID24)
+
+# Calculate RI for FID25
+alkane_FID25 <- alkanes %>% select(n, RT = RTFID25)
+df$RI_FID25 <- sapply(df$RTFID25, calculate_RI, alkane_df = alkane_FID25)
+
+# Save to Excel
+library(openxlsx)
+wb <- createWorkbook()
+addWorksheet(wb, "With RI")
+writeData(wb, "With RI", df)
+saveWorkbook(wb, "Retention_Indices_Calculated.xlsx", overwrite = TRUE)
+
