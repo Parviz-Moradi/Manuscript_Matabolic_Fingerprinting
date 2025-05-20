@@ -8,13 +8,13 @@ library(htmlwidgets)  # For saving as HTML
 
 # ---- Load your dataset ----
 # Replace this with actual dataset loading code (e.g., read.csv)
-data <- overview_grouped_data_xls
+data <- overview_grouped_data
 
 # Remove the first and last three columns to keep only relevant data
-pareto_scaled_data <- data[, -c(1, 47)]
+pareto_scaled_data <- data[, -c(1, 31,32)]
 
 # Perform PCA without further scaling (assuming data is already scaled)
-pca_result <- prcomp(pareto_scaled_data, scale. = FALSE)
+pca_result <- prcomp(pareto_scaled_data, scale = FALSE)
 
 # Summary of PCA results
 summary_pca <- summary(pca_result)
@@ -52,7 +52,7 @@ for (i in 1:nrow(pca_loadings_scaled)) {
 }
 
 # Set axis labels and titles with thicker axis lines
-par3d(linewidth = 3)  # Thicker axis lines
+par3d(linewidth = 4)  # Thicker axis lines
 title3d(
   xlab = paste0("PC1 (", round(summary_pca$importance[2, 1] * 100, 2), "%)"),
   ylab = paste0("PC2 (", round(summary_pca$importance[2, 2] * 100, 2), "%)"),
@@ -71,3 +71,6 @@ rgl.snapshot("3d_loading_plot_with_axes.png")  # Saves a static image of the plo
 
 # ---- Export the plot as an HTML file ----
 htmlwidgets::saveWidget(rglwidget(), "3d_loading_plot_with_axes.html")
+
+
+
