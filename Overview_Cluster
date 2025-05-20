@@ -1,5 +1,25 @@
 # Overview_Cluster by Dr. Parviz Moradi
+# Load data
 
+data<-Datafile_Absolute
+
+# standardize continuous variables
+numeric_data <- data[, -c(1, 31)]
+rownames (numeric_data)<- data$genotypes # Adding labels as a row number
+
+# Apply Pareto scaling to all 29 variables
+pareto_scaled <- apply(numeric_data, 2, function(col) {
+  (col - mean(col, na.rm = TRUE)) / sqrt(sd(col, na.rm = TRUE))
+})
+
+# Convert result back to a data frame or tibble
+pareto_scaled_df <- as.data.frame(pareto_scaled)
+
+# Optional: Retain same column names
+colnames(pareto_scaled_df) <- colnames(numeric_data)
+
+# View first few rows
+head(pareto_scaled_df)
 # Required Libraries
 require(factoextra)
 require(grDevices)
@@ -10,23 +30,21 @@ require(dplyr) # For data manipulation
 require(tidyr)    # For data reshaping
 
 # Load data ---------------------------------------------------------------
-data_norm <- DataFile_Species  # We have already scaled the data
+data_norm <- pareto_scaled_df  # We have already scaled the data
 
 # Adding genotype labels as rownames
 rownames(data_norm) <- DataFile_Species$genotype
 
-# Exclude the genotype column for clustering
-data_norm_numeric <- data_norm[, 2:46]
+
 
 # Determine and visualize optimal number of clusters ----------------------
 # Compute and visualize the Calinski-Harabasz Index
-fviz_nbclust(data_norm_numeric, kmeans, method = "gap_stat") +
-  ggtitle("Calinski-Harabasz Index for Optimal Clusters")
-
+fviz_nbclust(data_norm, kmeans, method = "silhouette") +
+  ggtitle("Silhouette Method for Optimal Clusters")
 
 
 # Distance matrix computation
-res.dist <- dist(x = data_norm_numeric, method = "euclidean")
+res.dist <- dist(x = data_norm, method = "euclidean")
 
 # Hierarchical clustering
 res.hc <- hclust(d = res.dist, method = "complete")
@@ -36,22 +54,22 @@ fviz_dend(x = res.hc, cex = 0.7, lwd = 0.7)
 
 
 # Circular dendrogram with 8 clusters -------------------------------------
-fviz_dend(res.hc, cex = 0.4, lwd = 0.8, k = 8,
+fviz_dend(res.hc, cex = 0.4, lwd = 0.8, k = 4,
           rect = TRUE,
           k_colors = "aaas",
           rect_border = "aaas",
           rect_fill = TRUE,
           type = "circular")
 
-# Assign clusters to the dataset ------------------------------------------
-k <- 8  # Number of clusters
-cluster_assignments <- cutree(res.hc, k)
+# Assign clusters
+data_norm$Cluster <- cutree(res.hc, k = 4)
 
-# Add cluster assignments to the dataset
-data_norm$Cluster <- cluster_assignments
+# Add genotype names as a column
+data_norm$Genotype <- rownames(data_norm)
 
-# Reorder columns to make genotype the first column
-data_norm_grouped <- data_norm %>% select(genotype, everything())
+# Reorder so Genotype is first
+data_norm <- data_norm %>% select(Genotype, everything())
 
-# Save the updated dataset to an Excel file -------------------------------
-write.xlsx(data_norm_grouped, file = "overview_grouped_data.xls", row.names = FALSE)
+# Save
+write.xlsx(data_norm, file = "overview_grouped_data.xlsx", rowNames = FALSE)
+
