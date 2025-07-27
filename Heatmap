@@ -1,28 +1,64 @@
-# Heatmap by Dr. Parviz Moradi
-#Load necessary libraries
-
+# heatmap
+# Load necessary libraries
 library(pheatmap)
-library(writexl)  # Load the writexl package
-library(dplyr)    # For data manipulation
-# Assuming your data is in a dataframe called 'data'
-data <- mean_grouped_selected_vars # Load your dataset
-# Extract genotype IDs
-group_ids <- data[, 1]  # First column: group ID
-data_matrix <- as.matrix(data[, -1])  # Extract data matrix excluding genotype IDs
-rownames(data_matrix) <- data$Group  # Set the first column as row names
+library(writexl)  
+library(dplyr)    
 
+# Load your dataset
+data <- species_percentage_mean 
+
+# Debug: Check structure and dimensions
+print(dim(data))
+print(head(data))
+
+# Ensure the first column is treated as character (species IDs)
+species_ID <- as.character(data[[1]])  
+data_matrix <- as.matrix(data[, 2:30])  
+
+# Standardize data (Z-score normalization)
+data_matrix <- scale(data_matrix)  
+
+# Debug: Check min and max values after scaling
+print(range(data_matrix))  
+
+# Ensure dimensions align
+if (nrow(data_matrix) != length(species_ID)) {
+  print(paste("Rows in data_matrix:", nrow(data_matrix)))
+  print(paste("Length of species_ID:", length(species_ID)))
+  stop("Mismatch between the number of rows in data_matrix and the length of species_ID.")
+}
+
+# Assign species IDs as row names
+rownames(data_matrix) <- species_ID
+
+# Get the true min/max values of the scaled data
+min_val <- min(data_matrix)
+max_val <- max(data_matrix)
+
+# Set a symmetric scale around zero
+abs_max <- max(abs(min_val), abs(max_val))
 
 # Define a color palette
 my_palette <- colorRampPalette(c("blue", "white", "red"))(100)
 
-# Create heatmap and display it in the viewer
-pheatmap(data_matrix,
-         clustering_rows = TRUE,                      # Cluster groups
-         clustering_cols = TRUE,                      # Cluster variables
-         show_rownames = TRUE,                        # Show labels on the y-axis
-         show_colnames = TRUE,                        # Show variable names on the x-axis
-         main = "Heatmap of Mean Values by Group",
+# Create evenly spaced breaks ensuring white is at zero
+breaks <- seq(-abs_max, abs_max, length.out = 101)
+
+# Debug: Check breaks range
+print(breaks)
+
+
+pheatmap(t(data_matrix),  # transpose the matrix
+         clustering_rows = TRUE,
+         clustering_cols = TRUE,
+         show_rownames = TRUE,
+         show_colnames = TRUE,
+         main = "Heatmap of Mean Values by Species",
          color = my_palette,
-         border_color = NA)    
+         breaks = breaks,
+         border_color = NA,
+         fontsize_col = 10)  # Use fontsize_col instead of fontsize_row after transpose
+
+
 
 
