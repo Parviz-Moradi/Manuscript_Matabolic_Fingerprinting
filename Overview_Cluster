@@ -1,10 +1,10 @@
 # Overview_Cluster by Dr. Parviz Moradi
 # Load data
 
-data<-Datafile_Absolute
+data<- Data_cluster_absolute
 
 # standardize continuous variables
-numeric_data <- data[, -c(1, 31)]
+numeric_data <- data[, -c(1)]
 rownames (numeric_data)<- data$genotypes # Adding labels as a row number
 
 # Apply Pareto scaling to all 29 variables
@@ -29,22 +29,16 @@ require(openxlsx)  # For saving Excel files
 require(dplyr) # For data manipulation
 require(tidyr)    # For data reshaping
 
-# Load data ---------------------------------------------------------------
-data_norm <- pareto_scaled_df  # We have already scaled the data
-
-# Adding genotype labels as rownames
-rownames(data_norm) <- DataFile_Species$genotype
-
 
 
 # Determine and visualize optimal number of clusters ----------------------
 # Compute and visualize the Calinski-Harabasz Index
-fviz_nbclust(data_norm, kmeans, method = "silhouette") +
+fviz_nbclust(pareto_scaled_df, kmeans, method = "silhouette") +
   ggtitle("Silhouette Method for Optimal Clusters")
 
 
 # Distance matrix computation
-res.dist <- dist(x = data_norm, method = "euclidean")
+res.dist <- dist(x = pareto_scaled_df, method = "euclidean")
 
 # Hierarchical clustering
 res.hc <- hclust(d = res.dist, method = "complete")
@@ -52,24 +46,45 @@ res.hc <- hclust(d = res.dist, method = "complete")
 # Cluster dendrogram visualization
 fviz_dend(x = res.hc, cex = 0.7, lwd = 0.7)
 
-
+# Open new plotting window (Windows example)
+windows()
 # Circular dendrogram with 8 clusters -------------------------------------
-fviz_dend(res.hc, cex = 0.4, lwd = 0.8, k = 4,
+fviz_dend(res.hc, cex = 0.4, lwd = 0.8, k = 8,
           rect = TRUE,
-          k_colors = "aaas",
-          rect_border = "aaas",
+          k_colors = c(
+            
+              "1" = "#B00000",  # deep red
+              "2" = "#E66100",  # reddish orange
+              "3" = "#F6C800",  # yellow
+              "4" = "#A6D200",  # yellow-green
+              "5" = "#00B9E3",  # cyan
+              "6" = "#1E78B4",  # blue
+              "7" = "#6829C2",  # purple
+              "8" = "#F3569A"  # pink
+          
+          ),
+          rect_border = c(
+            "#0173B2", "#DE8F05", "#029E73", "#D55E00",
+            "#CC78BC", "#CA9161", "#FBAFE4", "#949494"
+          ),
           rect_fill = TRUE,
           type = "circular")
 
-# Assign clusters
-data_norm$Cluster <- cutree(res.hc, k = 4)
 
-# Add genotype names as a column
-data_norm$Genotype <- rownames(data_norm)
+# Assign cluster
+Data_cluster_absolute$Cluster <- cutree(res.hc, k = 8)
 
-# Reorder so Genotype is first
-data_norm <- data_norm %>% select(Genotype, everything())
+
 
 # Save
-write.xlsx(data_norm, file = "overview_grouped_data.xlsx", rowNames = FALSE)
+write.xlsx(Data_cluster_absolute, file = "Data-cluster_absolute_grouped.xlsx", rowNames = FALSE)
+library(dplyr)
 
+# Create a table listing genotypes per cluster
+genotypes_per_cluster <- Data_cluster_absolute %>%
+  select(genotypes, Cluster) %>%
+  group_by(Cluster) %>%
+  summarise(genotypes = paste(genotypes, collapse = ", "))
+
+# Save to CSV
+write.csv(genotypes_per_cluster, file = "genotypes_per_cluster.csv", row.names = FALSE)
