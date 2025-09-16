@@ -1,10 +1,11 @@
 # Overview_Cluster by Dr. Parviz Moradi
+# Overview_Cluster by Dr. Parviz Moradi
 # Load data
 
-data<- Data_cluster_absolute
+data<- Datafile_Absolute
 
 # standardize continuous variables
-numeric_data <- data[, -c(1)]
+numeric_data <- data[, -c(1,31)]
 rownames (numeric_data)<- data$genotypes # Adding labels as a row number
 
 # Apply Pareto scaling to all 29 variables
@@ -32,10 +33,27 @@ require(tidyr)    # For data reshaping
 
 
 # Determine and visualize optimal number of clusters ----------------------
-# Compute and visualize the Calinski-Harabasz Index
-fviz_nbclust(pareto_scaled_df, kmeans, method = "silhouette") +
-  ggtitle("Silhouette Method for Optimal Clusters")
 
+library(NbClust)
+
+set.seed(123)
+
+# Run NbClust with KL index
+nb_kl <- NbClust(pareto_scaled_df, distance = "euclidean",
+                 min.nc = 2, max.nc = 10, method = "kmeans", index = "kl")
+
+# Suggested optimal number of clusters
+optimal_kl <- nb_kl$Best.nc[1]
+cat("Optimal number of clusters (KL index):", optimal_kl, "\n")
+
+# Optional: plot WSS with vertical line at KL optimal k
+library(factoextra)
+wss_data <- fviz_nbclust(pareto_scaled_df, kmeans, method = "wss")$data
+fviz_nbclust(pareto_scaled_df, kmeans, method = "wss") +
+  ggtitle("Elbow Method with KL Optimal Cluster") +
+  geom_vline(xintercept = optimal_kl, linetype = 2, color = "red", size = 1) +
+  annotate("text", x = optimal_kl + 0.5, y = max(wss_data$y), 
+           label = paste("KL Optimal k =", optimal_kl), color = "red", hjust = 0)
 
 # Distance matrix computation
 res.dist <- dist(x = pareto_scaled_df, method = "euclidean")
@@ -48,40 +66,33 @@ fviz_dend(x = res.hc, cex = 0.7, lwd = 0.7)
 
 # Open new plotting window (Windows example)
 windows()
-# Circular dendrogram with 8 clusters -------------------------------------
+
 fviz_dend(res.hc, cex = 0.4, lwd = 0.8, k = 8,
-          rect = TRUE,
           k_colors = c(
-            
-              "1" = "#B00000",  # deep red
-              "2" = "#E66100",  # reddish orange
-              "3" = "#F6C800",  # yellow
-              "4" = "#A6D200",  # yellow-green
-              "5" = "#00B9E3",  # cyan
-              "6" = "#1E78B4",  # blue
-              "7" = "#6829C2",  # purple
-              "8" = "#F3569A"  # pink
-          
+            "6" = "#D73027",  # warm red
+            "8" = "#FC8D59",  # coral / salmon
+            "3" = "#FEE08B",  # soft yellow
+            "4" = "#91CF60",  # fresh green
+            "1" = "#1F9E89",  # teal
+            "7" = "#4575B4",  # soft blue
+            "5" = "#7B3294",  # violet
+            "2" = "#F781BF"   # rose pink
           ),
-          rect_border = c(
-            "#0173B2", "#DE8F05", "#029E73", "#D55E00",
-            "#CC78BC", "#CA9161", "#FBAFE4", "#949494"
-          ),
-          rect_fill = TRUE,
+          rect = FALSE,       # << no rectangles drawn
           type = "circular")
 
 
 # Assign cluster
-Data_cluster_absolute$Cluster <- cutree(res.hc, k = 8)
+Datafile_Absolute$Cluster <- cutree(res.hc, k = 8)
 
 
 
 # Save
-write.xlsx(Data_cluster_absolute, file = "Data-cluster_absolute_grouped.xlsx", rowNames = FALSE)
+write.xlsx(Datafile_Absolute, file = "Data-cluster_absolute_grouped.xlsx", rowNames = FALSE)
 library(dplyr)
 
 # Create a table listing genotypes per cluster
-genotypes_per_cluster <- Data_cluster_absolute %>%
+genotypes_per_cluster <- Datafile_Absolute %>%
   select(genotypes, Cluster) %>%
   group_by(Cluster) %>%
   summarise(genotypes = paste(genotypes, collapse = ", "))
