@@ -1,76 +1,267 @@
-# ---- Install necessary packages if not installed ----
-if (!requireNamespace("rgl", quietly = TRUE)) install.packages("rgl")
-if (!requireNamespace("htmlwidgets", quietly = TRUE)) install.packages("htmlwidgets")
+# Load necessary libraries
+if (!requireNamespace("plotly", quietly = TRUE)) install.packages("plotly")
+if (!requireNamespace("cluster", quietly = TRUE)) install.packages("cluster")
 
-# ---- Load libraries ----
-library(rgl)  # For 3D interactive plots
-library(htmlwidgets)  # For saving as HTML
+library(plotly)
+library(cluster)
 
-# ---- Load your dataset ----
-# Replace this with actual dataset loading code (e.g., read.csv)
-data <- overview_grouped_data
+# Load your data
+data <- Data_cluster_absolute_grouped
 
-# Remove the first and last three columns to keep only relevant data
-pareto_scaled_data <- data[, -c(1, 31,32)]
+# Extract individual names and cluster labels
+genotypes <- data[[1]]
+Cluster <- data[[ncol(data)]]
 
-# Perform PCA without further scaling (assuming data is already scaled)
-pca_result <- prcomp(pareto_scaled_data, scale = FALSE)
+# Remove the first column (genotypes) and scale the numeric variables
+numeric_data <- data[, -c(1, 31)]
+rownames(numeric_data) <- data$genotypes
 
-# Summary of PCA results
-summary_pca <- summary(pca_result)
+# Apply Pareto scaling
+pareto_scaled <- apply(numeric_data, 2, function(col) {
+  (col - mean(col, na.rm = TRUE)) / sqrt(sd(col, na.rm = TRUE))
+})
+pareto_scaled_df <- as.data.frame(pareto_scaled)
+
+# Perform PCA
+pca_result <- prcomp(pareto_scaled_df, scale. = FALSE)
+
+# Summary of PCA
+print(summary(pca_result))
 
 # Extract PCA loadings
 pca_loadings <- as.data.frame(pca_result$rotation)
 pca_loadings$Trait <- rownames(pca_loadings)
 
-# Scale the loadings for better visual clarity (adjust scaling factor as needed)
-scaling_factor <- 3
-pca_loadings_scaled <- pca_loadings[, 1:3] * scaling_factor
-pca_loadings_scaled$Trait <- pca_loadings$Trait
+# Compute contribution rate of each trait
+numeric_loadings <- pca_loadings[, sapply(pca_loadings, is.numeric)]
+contribution_rate <- numeric_loadings^2
+contribution_rate <- sweep(contribution_rate, 2, colSums(contribution_rate), "/")
+contribution_rate <- contribution_rate * 100
+contribution_rate <- contribution_rate[, 1:3]
+contribution_rate$Trait <- pca_loadings$Trait
 
-# ---- Create 3D Loading Plot ----
-open3d()  # Open a new 3D plotting device
+# Save contribution rates
+write.csv(contribution_rate, file = "contribution_rate.csv", row.names = FALSE)
+print(contribution_rate)
 
-# Plot loading vectors (arrows) in 3D for the loadings of PC1, PC2, PC3
-for (i in 1:nrow(pca_loadings_scaled)) {
-  # Add arrows for the loadings
-  segments3d(
-    x = c(0, pca_loadings_scaled$PC1[i]), 
-    y = c(0, pca_loadings_scaled$PC2[i]), 
-    z = c(0, pca_loadings_scaled$PC3[i]), 
-    col = "blue", lwd = 2  # Color and width of the arrows
-  )
-  
-  # Add labels at the end of the arrows
-  text3d(
-    x = pca_loadings_scaled$PC1[i], 
-    y = pca_loadings_scaled$PC2[i], 
-    z = pca_loadings_scaled$PC3[i], 
-    texts = pca_loadings_scaled$Trait[i], 
-    col = "blue", adj = 1.2
-  )
-}
-
-# Set axis labels and titles with thicker axis lines
-par3d(linewidth = 4)  # Thicker axis lines
-title3d(
-  xlab = paste0("PC1 (", round(summary_pca$importance[2, 1] * 100, 2), "%)"),
-  ylab = paste0("PC2 (", round(summary_pca$importance[2, 2] * 100, 2), "%)"),
-  zlab = paste0("PC3 (", round(summary_pca$importance[2, 3] * 100, 2), "%)"),
-  col = "black"
+# Define custom colors for each cluster
+cluster_colors <- c(
+  "6" = "#D73027",  # warm red
+  "8" = "#FC8D59",  # coral / salmon
+  "3" = "#FEE08B",  # soft yellow
+  "4" = "#91CF60",  # fresh green
+  "1" = "#1F9E89",  # teal
+  "7" = "#4575B4",  # soft blue
+  "5" = "#7B3294",  # violet
+  "2" = "#F781BF"   # rose pink
 )
 
-# Add 3D axes without additional text
-axes3d(edges = "bbox", col = "black", labels = TRUE)
+# Extract PCA scores and assign cluster colors
+pca_scores <- as.data.frame(pca_result$x)
+pca_scores$Individual <- genotypes
+pca_scores$Cluster <- Cluster
+pca_scores$Color <- cluster_colors[as.character(Cluster)]
 
-# ---- Render the 3D plot in RStudio Viewer ----
-rglwidget()  # Displays the 3D plot in the RStudio viewer
+# Plot 3D PCA using Plotly
+fig <- plot_ly(
+  data = pca_scores,
+  x = ~PC1, y = ~PC2, z = ~PC3,
+  type = 'scatter3d',
+  mode = 'markers',
+  marker = list(size = 5),
+  color = ~as.factor(Cluster),
+  colors = cluster_colors[unique(as.character(Cluster))],
+  text = ~paste("Genotype:", Individual, "<br>Cluster:", Cluster),
+  hoverinfo = "text"
+) %>%
+  layout(
+    title = "3D PCA Plot",
+    scene = list(
+      xaxis = list(title = paste0("PC1 (", round(summary(pca_result)$importance[2, 1] * 100, 1), "%)")),
+      yaxis = list(title = paste0("PC2 (", round(summary(pca_result)$importance[2, 2] * 100, 1), "%)")),
+      zaxis = list(title = paste0("PC3 (", round(summary(pca_result)$importance[2, 3] * 100, 1), "%)"))
+    ),
+    legend = list(title = list(text = '<b>Cluster</b>'))
+  )
 
-# ---- Save the 3D plot as a static image (PNG) ----
-rgl.snapshot("3d_loading_plot_with_axes.png")  # Saves a static image of the plot
-
-# ---- Export the plot as an HTML file ----
-htmlwidgets::saveWidget(rglwidget(), "3d_loading_plot_with_axes.html")
+# Show the interactive plot
+windows()
+fig
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Plot PCA 2D scores
+
+# Use plot_ly with legend support
+score_plot_2d <- plot_ly(
+  data = pca_scores,
+  x = ~PC1,
+  y = ~PC2,
+  text = ~Individual,
+  type = 'scatter',
+  mode = 'markers+text',
+  color = ~Cluster,
+  colors = cluster_colors,
+  marker = list(size = 7, line = list(color = 'black', width = 1.5)),
+  textposition = "top right",
+  textfont = list(size = 10, color = 'black')
+) %>%
+  layout(
+    title = "2D PCA Scores Plot with Cluster Legend",
+    legend = list(title = list(text = "Cluster"), font = list(size = 12)),
+    xaxis = list(
+      title = paste0("PC1 (", round(summary(pca_result)$importance[2, 1] * 100, 2), "%)"),
+      linecolor = 'black', linewidth = 2,
+      tickfont = list(family = 'bold', size = 12, color = 'black'),
+      titlefont = list(family = 'bold', size = 14, color = 'black')
+    ),
+    yaxis = list(
+      title = paste0("PC2 (", round(summary(pca_result)$importance[2, 2] * 100, 2), "%)"),
+      linecolor = 'black', linewidth = 2,
+      tickfont = list(family = 'bold', size = 12, color = 'black'),
+      titlefont = list(family = 'bold', size = 14, color = 'black')
+    )
+  )
+
+# Show plot
+# Open new plotting window (Windows example)
+windows()
+score_plot_2d
+
+# ---------------------------------------------
+# Loading Plot (Biplot-style) for PCA Loadings
+# ---------------------------------------------
+loading_plot <- plot_ly() %>%
+  add_segments(
+    data = pca_loadings,
+    x = 0, xend = ~PC1,
+    y = 0, yend = ~PC2,
+    line = list(color = 'royalblue', width = 1),  # arrows in royal blue
+    showlegend = FALSE
+  ) %>%
+  add_trace(
+    data = pca_loadings,
+    x = ~PC1,
+    y = ~PC2,
+    text = ~Trait,
+    type = 'scatter',
+    mode = 'markers+text',
+    marker = list(size = 8, color = 'black'),
+    textposition = "top center",
+    textfont = list(size = 12, color = 'royalblue', family = 'Arial Black'), # bold + royal blue
+    showlegend = FALSE
+  ) %>%
+  layout(
+    title = list(text = "", 
+                 font = list(size = 18, color = 'black', family = 'Arial Black')),
+    xaxis = list(
+      title = paste0("PC1 (", round(summary(pca_result)$importance[2, 1] * 100, 2), "%)"),
+      zeroline = TRUE, showline = TRUE, linecolor = 'black',
+      titlefont = list(size = 16, color = 'black', family = 'Arial Black'),
+      tickfont  = list(size = 14, color = 'black', family = 'Arial Black')
+    ),
+    yaxis = list(
+      title = paste0("PC2 (", round(summary(pca_result)$importance[2, 2] * 100, 2), "%)"),
+      zeroline = TRUE, showline = TRUE, linecolor = 'black',
+      titlefont = list(size = 16, color = 'black', family = 'Arial Black'),
+      tickfont  = list(size = 14, color = 'black', family = 'Arial Black')
+    )
+  )
+
+# Display in RStudio or browser
+loading_plot
+
+# Biplot for PC1 and PC3
+loading_plot_pc1_pc3 <- plot_ly() %>%
+  add_segments(
+    data = pca_loadings,
+    x = 0, xend = ~PC1,
+    y = 0, yend = ~PC3,
+    line = list(color = 'royalblue', width = 1),  # arrows in royal blue
+    showlegend = FALSE
+  ) %>%
+  add_trace(
+    data = pca_loadings,
+    x = ~PC1,
+    y = ~PC3,
+    text = ~Trait,
+    type = 'scatter',
+    mode = 'markers+text',
+    marker = list(size = 8, color = 'royalblue'),   # markers in royal blue
+    textposition = "top center",
+    textfont = list(size = 12, color = 'royalblue', family = 'Arial Black'), # bold + royal blue
+    showlegend = FALSE
+  ) %>%
+  layout(
+    title = list(text = "", 
+                 font = list(size = 18, color = 'black', family = 'Arial Black')),
+    xaxis = list(
+      title = paste0("PC1 (", round(summary(pca_result)$importance[2, 1] * 100, 2), "%)"),
+      zeroline = TRUE, showline = TRUE, linecolor = 'black',
+      titlefont = list(size = 16, color = 'black', family = 'Arial Black'),
+      tickfont  = list(size = 14, color = 'black', family = 'Arial Black')
+    ),
+    yaxis = list(
+      title = paste0("PC3 (", round(summary(pca_result)$importance[2, 3] * 100, 2), "%)"),
+      zeroline = TRUE, showline = TRUE, linecolor = 'black',
+      titlefont = list(size = 16, color = 'black', family = 'Arial Black'),
+      tickfont  = list(size = 14, color = 'black', family = 'Arial Black')
+    )
+  )
+
+# Show the PC1 vs PC3 plot
+loading_plot_pc1_pc3
+
+# Biplot for PC2 and PC3
+loading_plot_pc2_pc3 <- plot_ly() %>%
+  add_segments(
+    data = pca_loadings,
+    x = 0, xend = ~PC2,
+    y = 0, yend = ~PC3,
+    line = list(color = 'royalblue', width = 1),  # arrows in royal blue
+    showlegend = FALSE
+  ) %>%
+  add_trace(
+    data = pca_loadings,
+    x = ~PC2,
+    y = ~PC3,
+    text = ~Trait,
+    type = 'scatter',
+    mode = 'markers+text',
+    marker = list(size = 8, color = 'royalblue'),   # markers in royal blue
+    textposition = "top center",
+    textfont = list(size = 12, color = 'royalblue', family = 'Arial Black'), # bold + royal blue
+    showlegend = FALSE
+  ) %>%
+  layout(
+    title = list(text = "", 
+                 font = list(size = 18, color = 'black', family = 'Arial Black')),
+    xaxis = list(
+      title = paste0("PC2 (", round(summary(pca_result)$importance[2, 2] * 100, 2), "%)"),
+      zeroline = TRUE, showline = TRUE, linecolor = 'black',
+      titlefont = list(size = 16, color = 'black', family = 'Arial Black'),
+      tickfont  = list(size = 14, color = 'black', family = 'Arial Black')
+    ),
+    yaxis = list(
+      title = paste0("PC3 (", round(summary(pca_result)$importance[2, 3] * 100, 2), "%)"),
+      zeroline = TRUE, showline = TRUE, linecolor = 'black',
+      titlefont = list(size = 16, color = 'black', family = 'Arial Black'),
+      tickfont  = list(size = 14, color = 'black', family = 'Arial Black')
+    )
+  )
+
+# Show the PC2 vs PC3 plot
+loading_plot_pc2_pc3
