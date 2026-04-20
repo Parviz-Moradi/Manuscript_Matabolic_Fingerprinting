@@ -1,52 +1,154 @@
-# Script written by Dr. Parviz Moradi
-# Bar Plot with Data Points for Mentha Traits ----------------------------------
-pacman::p_load(
-  ggplot2,
-  ggtext,
-  tidyr,
-  dplyr
+# ============================================================
+# Figure SF1a and SF1b — Split and improved readability
+# Includes raw-to-percentage conversion
+# all species with barplot of VOCs
+# ============================================================
+
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+# ============================================================
+# STEP 1: LOAD RAW DATA AND CONVERT TO PERCENTAGE
+# ============================================================
+
+# Load your raw data object (already in environment)
+Data_raw <- Data_raw_PCA   # <-- change if your object has a different name
+
+# Name the 31st column as Species
+colnames(Data_raw)[31] <- "Species"
+
+# Separate metadata
+genotype_col <- Data_raw[[1]]           # Column 1: genotype IDs
+species_col  <- Data_raw[["Species"]]   # Last column: species labels
+
+# Extract only the VOC numeric columns (columns 2 to 30)
+voc_cols <- Data_raw[, 2:30]
+
+# Row-wise percentage conversion:
+# each value / row total * 100
+row_sums   <- rowSums(voc_cols, na.rm = TRUE)
+voc_percent <- sweep(voc_cols, 1, row_sums, FUN = "/") * 100
+
+# Rebuild clean data frame
+Data_boxplot <- data.frame(
+  Genotype = genotype_col,
+  voc_percent,
+  Species  = species_col,
+  check.names = FALSE
 )
-library(readxl)
 
-# Load your data
-Data <- DataFile_Species
-View(Data)
+cat("Percentage conversion complete.\n")
+cat("Row sum check (all values should be ~100):\n")
+print(summary(rowSums(Data_boxplot[, 2:30])))
 
-# Restructure data for the plot
-data_long <- tibble(Data) %>%
-  pivot_longer(cols = 2:46,  # Assuming the traits are in columns 2 to 46
-               names_to = "Trait",
-               values_to = "Value")
+# ============================================================
+# STEP 2: EXCLUDE LOW-ABUNDANCE / UNIDENTIFIED COMPOUNDS
+# ============================================================
 
-# Calculate means and standard errors for each trait
-summary_stats <- data_long %>%
-  group_by(Trait) %>%
-  summarise(
-    Mean = mean(Value, na.rm = TRUE),
-    SE = sd(Value, na.rm = TRUE) / sqrt(n()),
-    .groups = "drop"
-  )
+# These are the X-compounds excluded from the main analysis
+excluded_vars <- c("X10", "X103", "X113", "X13")
 
-# Create the bar plot with data points
-ggplot() +
-  geom_bar(data = summary_stats, aes(x = Trait, y = Mean), 
-           stat = "identity", fill = "red", alpha = 0.7, width = 0.7) +  # Bar for mean
-  geom_errorbar(data = summary_stats, aes(x = Trait, ymin = Mean - SE, ymax = Mean + SE), 
-                width = 0.2, color = "red") +  # Error bars for SE
-  geom_jitter(data = data_long, aes(x = Trait, y = Value), 
-              width = 0.2, size = 1, alpha = 0.6, color = "red") +  # Data points
-  labs(
-    title = "",
-    x = "",
-    y = ""
-  ) +
-  theme_minimal() +
+data_subset <- Data_boxplot %>%
+  select(-any_of(excluded_vars))
+
+# Retain Genotype (col 1) and Species (last col) cleanly
+data_subset <- data_subset %>%
+  select(Genotype = 1, everything(), Species)
+
+# ============================================================
+# STEP 3: RESHAPE TO LONG FORMAT
+# ============================================================
+
+long_data <- pivot_longer(
+  data_subset,
+  cols      = -c(Genotype, Species),
+  names_to  = "Variable",
+  values_to = "Value"
+)
+
+# Top accession per compound per species (for label annotation)
+# Only label if value >= 1% (meaningful in percentage space)
+top_points_filtered <- long_data %>%
+  group_by(Species, Variable) %>%
+  slice_max(order_by = Value, n = 1) %>%
+  filter(Value >= 1)
+
+num_vars <- length(unique(long_data$Variable))
+
+# ============================================================
+# STEP 4: SPLIT SPECIES INTO SF1a (first 10) AND SF1b (rest)
+# ============================================================
+
+all_species <- unique(long_data$Species)
+cat("\nSpecies order detected:\n")
+print(all_species)
+cat(sprintf("\nTotal species: %d  →  SF1a: 1–10  |  SF1b: 11–%d\n",
+            length(all_species), length(all_species)))
+
+species_SF1a <- all_species[1:10]
+species_SF1b <- all_species[11:length(all_species)]
+
+long_SF1a <- long_data          %>% filter(Species %in% species_SF1a)
+long_SF1b <- long_data          %>% filter(Species %in% species_SF1b)
+top_SF1a  <- top_points_filtered %>% filter(Species %in% species_SF1a)
+top_SF1b  <- top_points_filtered %>% filter(Species %in% species_SF1b)
+
+# Apply italic() wrapper AFTER splitting to keep factor levels consistent
+long_SF1a <- long_SF1a %>% mutate(Species = paste0("italic('", Species, "')"))
+long_SF1b <- long_SF1b %>% mutate(Species = paste0("italic('", Species, "')"))
+top_SF1a  <- top_SF1a  %>% mutate(Species = paste0("italic('", Species, "')"))
+top_SF1b  <- top_SF1b  %>% mutate(Species = paste0("italic('", Species, "')"))
+
+# ============================================================
+# STEP 5: SHARED THEME (improved readability)
+# ============================================================
+
+sf1_theme <- theme_minimal() +
   theme(
-    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 5.5, face = "bold"),
-    axis.text.y = element_text(size = 10, face = "bold"),
-    axis.title = element_text(size = 12, face = "bold"),
-    plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+    axis.text.x     = element_text(size = 8,  angle = 45, hjust = 1, vjust = 1, face = "bold"),
+    axis.text.y     = element_text(size = 9,  face = "bold"),
+    axis.title.y    = element_text(size = 12, face = "bold"),
+    axis.title.x    = element_blank(),
+    legend.position = "none",
+    strip.text      = element_text(size = 11, face = "italic"),
+    panel.grid      = element_blank(),
+    plot.margin     = margin(t = 10, r = 10, b = 10, l = 10)
   )
 
+# ============================================================
+# STEP 6: BUILD FIGURES
+# ============================================================
 
+build_sf1 <- function(ldata, tdata, nrow_val) {
+  ggplot(ldata, aes(x = Variable, y = Value, color = Variable, fill = Variable)) +
+    geom_boxplot(alpha = 0.5, outlier.shape = NA) +
+    geom_jitter(width = 0.2, size = 1.5, shape = 21,
+                stroke = 0.5, color = "black", show.legend = FALSE) +
+    geom_text(data = tdata, aes(label = Genotype),
+              size = 2.8, vjust = -1, color = "black") +
+    scale_fill_manual(values  = rainbow(num_vars)) +
+    scale_color_manual(values = rainbow(num_vars)) +
+    labs(y = "% of Total VOCs") +
+    coord_cartesian(ylim = c(0, 70)) +
+    sf1_theme +
+    facet_wrap(~ Species, ncol = 5, nrow = nrow_val, labeller = label_parsed)
+}
 
+p_SF1a <- build_sf1(long_SF1a, top_SF1a, nrow_val = 2)
+p_SF1b <- build_sf1(long_SF1b, top_SF1b, nrow_val = 2)
+
+# ============================================================
+# STEP 7: SAVE OUTPUTS
+# ============================================================
+
+for (fmt in c("pdf", "png")) {
+  ggsave(paste0("Figure_SF1a.", fmt), plot = p_SF1a,
+         width = 40, height = 22, units = "cm", dpi = 300)
+  ggsave(paste0("Figure_SF1b.", fmt), plot = p_SF1b,
+         width = 40, height = 22, units = "cm", dpi = 300)
+}
+
+cat("\nDone! Files saved:\n")
+cat("  Figure_SF1a.pdf / .png  (species 1–10)\n")
+cat("  Figure_SF1b.pdf / .png  (species 11–", length(all_species), ")\n")
